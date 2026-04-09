@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { SidebarNav } from "@/components/freight/sidebar-nav"
 import { OpsStats } from "@/components/freight/ops-stats"
 import { AIBrief } from "@/components/freight/ai-brief"
+import { ManualEntryForm } from "@/components/freight/manual-entry-form"
 import { Button } from "@/components/ui/button"
 import { Menu, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
-import type { OpsDataResponse } from "@/lib/types/ops"
+import type { OpsDataResponse, OpsMetrics } from "@/lib/types/ops"
 
 export default function OpsOverview() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -75,6 +76,20 @@ export default function OpsOverview() {
     }
   }, [fetchData])
 
+  // Manual entry save handler
+  const handleManualSave = useCallback((metrics: OpsMetrics) => {
+    setData(prev => ({
+      metrics,
+      details: prev?.details,
+      integrationStatus: prev?.integrationStatus ?? {
+        slack: { connected: false, lastSync: null },
+        gmail: { connected: false, lastSync: null },
+        tai: { connected: false, lastSync: null },
+        truckstop: { connected: false, lastSync: null },
+      }
+    }))
+  }, [])
+
   // Format last synced time
   const lastSyncedText = data?.metrics.lastSynced
     ? `Last synced: ${new Date(data.metrics.lastSynced).toLocaleTimeString()}`
@@ -138,6 +153,10 @@ export default function OpsOverview() {
                     {lastSyncedText}
                   </p>
                 </div>
+                <ManualEntryForm 
+                  currentMetrics={data?.metrics} 
+                  onSave={handleManualSave} 
+                />
                 <Button
                   variant="outline"
                   size="sm"
