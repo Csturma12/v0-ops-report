@@ -54,7 +54,7 @@ export function SidebarNav({ open, onClose }: SidebarNavProps) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-56 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-200",
-          "lg:relative lg:translate-x-0 lg:z-0",
+          "lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:z-0",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
