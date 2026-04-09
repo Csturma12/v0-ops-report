@@ -17,9 +17,29 @@ export default function OpsOverview() {
   const [error, setError] = useState<Error | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Fetch ops data
+  // Fetch ops data (try manual endpoint first, fall back to integrations)
   const fetchData = useCallback(async () => {
     try {
+      // First check for manually entered data
+      const manualRes = await fetch("/api/ops/manual")
+      const manualData = await manualRes.json()
+      
+      if (manualData.success && manualData.metrics) {
+        setData({
+          metrics: manualData.metrics,
+          integrationStatus: {
+            slack: { connected: false, lastSync: null },
+            gmail: { connected: false, lastSync: null },
+            tai: { connected: true, lastSync: manualData.metrics.lastUpdated },
+            truckstop: { connected: false, lastSync: null },
+          }
+        })
+        setError(null)
+        setIsLoading(false)
+        return
+      }
+
+      // Fall back to integration data
       const res = await fetch("/api/ops/data")
       if (!res.ok) throw new Error("Failed to fetch")
       const json = await res.json()

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import {
   Zap,
@@ -29,7 +30,8 @@ const opsNavigation = [
 ]
 
 const configNavigation = [
-  { name: "Settings", icon: Settings },
+  { name: "Setup TAI Sync", icon: Zap, href: "/setup" },
+  { name: "Settings", icon: Settings, href: "#" },
 ]
 
 interface SidebarNavProps {
@@ -107,13 +109,14 @@ export function SidebarNav({ open, onClose }: SidebarNavProps) {
 
         <div className="py-2 px-2 space-y-0.5 pb-6">
           {configNavigation.map((item) => (
-            <button
+            <Link
               key={item.name}
+              href={item.href}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50 transition-colors"
             >
               <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
               <span>{item.name}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </aside>
