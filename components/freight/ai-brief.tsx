@@ -3,30 +3,47 @@
 import { useState } from "react"
 import { Zap, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import type { OpsMetrics } from "@/lib/types/ops"
 
-export function AIBrief() {
+interface AIBriefProps {
+  metrics?: OpsMetrics
+}
+
+export function AIBrief({ metrics }: AIBriefProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [briefContent, setBriefContent] = useState<string | null>(null)
 
   const handleRunBrief = async () => {
     setIsLoading(true)
-    // Simulate AI processing
+    // Simulate AI processing with actual metrics
     await new Promise((resolve) => setTimeout(resolve, 2000))
+    
+    const m = metrics || {
+      critical: 0, urgent: 3, uncovered: 10, newLoads: 5,
+      quotes: 1, cancels: 0, tracking: 4, billingGaps: 2
+    }
+    
+    const criticalSection = m.critical > 0 
+      ? `\n**CRITICAL:** ${m.critical} items require immediate action - act now!` 
+      : ""
+    
     setBriefContent(
       `**Operations Summary - ${new Date().toLocaleTimeString()}**
+${criticalSection}
+Your freight operations status:
 
-Your freight operations are running smoothly with a few items requiring attention:
-
-- **3 urgent loads** need carrier assignment before tonight/AM deadlines
-- **10 uncovered loads** are waiting for carrier coverage - prioritize high-value shipments
-- **5 new loads** have come in since your last review
-- **4 shipments** are currently in transit with active tracking
-- **2 billing gaps** detected - missing sell prices need to be resolved
+- **${m.urgent} urgent loads** need carrier assignment before tonight/AM deadlines
+- **${m.uncovered} uncovered loads** are waiting for carrier coverage - prioritize high-value shipments
+- **${m.newLoads} new loads** have come in since your last review
+- **${m.quotes} open quote requests** pending response
+- **${m.tracking} shipments** currently in transit with active tracking
+- **${m.billingGaps} billing gaps** detected - missing sell prices need resolution
+${m.cancels > 0 ? `- **${m.cancels} carrier cancellations** require rebooking` : ""}
 
 **Recommended Actions:**
-1. Review and assign carriers to the 3 urgent loads immediately
-2. Check the 2 carrier problems flagged for potential service issues
-3. Update sell prices for the 2 billing gap items`
+1. ${m.urgent > 0 ? `Review and assign carriers to the ${m.urgent} urgent loads immediately` : "No urgent loads - focus on uncovered capacity"}
+2. ${m.uncovered > 5 ? "Prioritize uncovered loads by margin and deadline" : "Uncovered loads under control"}
+3. ${m.billingGaps > 0 ? `Update sell prices for the ${m.billingGaps} billing gap items` : "Billing is clean"}`
     )
     setIsLoading(false)
   }
