@@ -105,14 +105,14 @@ export function SidebarNav({ open, onClose }: SidebarNavProps) {
   return (
     <>
       {/* Desktop Sidebar - always visible, in document flow */}
-      <aside className="hidden lg:flex w-56 min-h-screen bg-sidebar border-r border-sidebar-border flex-col shrink-0">
+      <aside className="hidden md:flex w-56 min-h-screen bg-sidebar border-r border-sidebar-border flex-col shrink-0">
         <SidebarContent />
       </aside>
 
       {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
           onClick={onClose}
         />
       )}
@@ -120,7 +120,7 @@ export function SidebarNav({ open, onClose }: SidebarNavProps) {
       {/* Mobile Sidebar - fixed, slides in */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-56 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-200 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-56 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-200 md:hidden",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
