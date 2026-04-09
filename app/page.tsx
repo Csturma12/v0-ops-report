@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import useSWR from "swr"
 import { SidebarNav } from "@/components/freight/sidebar-nav"
 import { OpsStats } from "@/components/freight/ops-stats"
 import { AIBrief } from "@/components/freight/ai-brief"
@@ -9,19 +8,35 @@ import { Button } from "@/components/ui/button"
 import { Menu, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
 import type { OpsDataResponse } from "@/lib/types/ops"
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
-
 export default function OpsOverview() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [dateTime, setDateTime] = useState({ date: "", time: "" })
   const [syncing, setSyncing] = useState(false)
+  const [data, setData] = useState<OpsDataResponse | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Fetch ops data with SWR (auto-refresh every 5 minutes)
-  const { data, error, isLoading, mutate } = useSWR<OpsDataResponse>(
-    "/api/ops/data",
-    fetcher,
-    { refreshInterval: 5 * 60 * 1000 }
-  )
+  // Fetch ops data
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ops/data")
+      if (!res.ok) throw new Error("Failed to fetch")
+      const json = await res.json()
+      setData(json)
+      setError(null)
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Initial fetch and auto-refresh every 5 minutes
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [fetchData])
 
   // Set date/time on client only to avoid hydration mismatch
   useEffect(() => {
@@ -52,13 +67,13 @@ export default function OpsOverview() {
     setSyncing(true)
     try {
       await fetch("/api/sync", { method: "POST" })
-      await mutate()
+      await fetchData()
     } catch (err) {
       console.error("Sync failed:", err)
     } finally {
       setSyncing(false)
     }
-  }, [mutate])
+  }, [fetchData])
 
   // Format last synced time
   const lastSyncedText = data?.metrics.lastSynced
