@@ -40,7 +40,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${jetbrainsMono.variable} font-mono antialiased`}>
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <Analytics />
       </body>
     </html>
   )
