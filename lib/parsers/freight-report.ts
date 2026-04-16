@@ -1,10 +1,7 @@
-// Parses freight ops reports from Slack (produced by the hourly Claude task)
-// into OpsMetrics + OpsDetails, so users can paste the report and have it
-// routed into the right dashboard sections automatically.
-//
-// The parser is intentionally tolerant: it looks for known section headers
-// and explicit totals (e.g. "(~156 total)"), and falls back to counting
-// child bullet lines when no explicit total is given.
+// Parses freight ops reports from Slack or Claude Cowork into OpsMetrics
+// + OpsDetails. The parser is intentionally tolerant — it looks for known
+// section headers, strips markdown/emoji formatting, and falls back
+// gracefully when any given section is missing.
 import type {
   AlertItem,
   BillingItem,
@@ -22,28 +19,38 @@ export interface ParsedReport {
   warnings: string[]
 }
 
-// Section header strings we look for. Matching is case-insensitive and
-// tolerant of a leading ":rotating_light:" or similar Slack emoji prefix.
+// Section header strings we look for (case-insensitive, markdown-stripped).
+// Order matters for disambiguation: longer matches win if multiple would match.
 const SECTION_HEADERS = [
   "IMCC HOT CONTAINERS",
   "New Customer Quotes/RFQs",
+  "New Customer Quotes",
   "Load Tenders",
   "Customer Update Requests",
   "Team Updates",
   "Carrier Cancellations/Falloffs",
+  "Carrier Cancellations",
   "TMS Uncovered Loads",
   "$0 Rate Loads Needing Pricing",
+  "$0 Rate Loads",
   "Top Action Items",
   "Watchlist Action Items",
+  "Action Items",
 ] as const
 
 type SectionHeader = (typeof SECTION_HEADERS)[number]
 
+// Canonicalize aliased headers (e.g. "New Customer Quotes" → "New Customer Quotes/RFQs")
+const CANONICAL: Record<string, SectionHeader> = {
+  "New Customer Quotes": "New Customer Quotes/RFQs",
+  "Carrier Cancellations": "Carrier Cancellations/Falloffs",
+  "$0 Rate Loads": "$0 Rate Loads Needing Pricing",
+  "Action Items": "Top Action Items",
+}
+
 interface ParsedSection {
   header: SectionHeader
-  // Raw header line (preserves "(~156 total)" suffix etc.)
   headerLine: string
-  // Child bullet lines, trimmed, excluding the header itself.
   lines: string[]
 }
 
@@ -51,27 +58,41 @@ interface ParsedSection {
 
 export function parseFreightReport(rawText: string): ParsedReport {
   const warnings: string[] = []
-  // Each report ends with "Sent using @Claude". If multiple are pasted,
-  // prefer the most recent one by timestamp in its header.
-  const reportBlocks = splitIntoReports(rawText)
 
-  // Pick the freshest "Freight Ops Update" block (has the most parseable sections);
-  // merge in any "Watchlist Update" from the same snapshot for richer items.
+  // Normalize the text up front: strip markdown formatting, Slack wrappers,
+  // and zero-width characters that throw off header matching.
+  const normalized = normalizeText(rawText)
+
+  const reportBlocks = splitIntoReports(normalized)
+
   const opsReport = pickLatest(reportBlocks, "Freight Ops Update")
   const watchlistReport = pickLatest(reportBlocks, "Watchlist Update")
 
-  if (!opsReport && !watchlistReport) {
+  // If we couldn't find an explicit report header, treat the whole text as a
+  // single block. This makes the parser work with Claude's programmatic POSTs
+  // which might not include "Sent using @Claude" or a report-title line.
+  const primaryText =
+    opsReport?.text ??
+    watchlistReport?.text ??
+    (reportBlocks[0]?.text ?? normalized)
+
+  if (!opsReport && !watchlistReport && reportBlocks.length === 0) {
     warnings.push(
-      "No recognizable 'Freight Ops Update' or 'Watchlist Update' header found.",
+      "No 'Freight Ops Update' / 'Watchlist Update' header found — parsing whole text.",
     )
   }
 
-  const primary = opsReport ?? watchlistReport
-  const primaryText = primary?.text ?? rawText
   const sections = extractSections(primaryText)
 
-  // Timestamp from the report header (e.g. "Freight Ops Update — Fri 4/10 1:10 PM CT")
-  const reportTimestamp = extractTimestamp(primary?.headerLine ?? rawText)
+  if (sections.size === 0) {
+    warnings.push(
+      "No recognizable section headers found (e.g. 'TMS Uncovered Loads', 'Top Action Items').",
+    )
+  }
+
+  const reportTimestamp =
+    extractTimestamp(opsReport?.headerLine ?? watchlistReport?.headerLine ?? "") ??
+    extractTimestamp(primaryText)
 
   const metrics = buildMetrics(sections, warnings)
   const details = buildDetails(sections, watchlistReport?.text ?? "", warnings)
@@ -87,6 +108,31 @@ export function parseFreightReport(rawText: string): ParsedReport {
   }
 }
 
+// ---- Normalization --------------------------------------------------------
+
+function normalizeText(raw: string): string {
+  return (
+    raw
+      // Collapse Windows line endings
+      .replace(/\r\n/g, "\n")
+      // Strip zero-width characters that Slack sometimes injects
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      // Strip markdown emphasis markers: **bold**, *italic*, __bold__, _italic_
+      // But preserve the inner text so section headers still match.
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      // Only strip single-* emphasis when it clearly wraps a word (avoid eating
+      // the "*" used as bullets in some paste formats).
+      .replace(/(^|\s)\*(\S[^*\n]*?\S)\*(?=\s|$|[.,;:])/gm, "$1$2")
+      .replace(/(^|\s)_(\S[^_\n]*?\S)_(?=\s|$|[.,;:])/gm, "$1$2")
+      // Slack-style mention/link wrappers: <@U123>, <!channel>, <http://...>
+      .replace(/<!?(channel|here|everyone)>/g, "")
+      .replace(/<@[UW][A-Z0-9]+\|?([^>]*)>/g, "$1")
+      .replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g, "$2")
+      .replace(/<(https?:\/\/[^>]+)>/g, "$1")
+  )
+}
+
 // ---- Splitting & selection ------------------------------------------------
 
 interface ReportBlock {
@@ -97,18 +143,33 @@ interface ReportBlock {
 }
 
 function splitIntoReports(raw: string): ReportBlock[] {
-  // "Sent using @Claude" reliably marks the end of each report. Split on it,
-  // then classify each chunk by looking for known header lines.
-  const chunks = raw.split(/Sent using @Claude/gi)
+  // Prefer to split on "Sent using @Claude" if present; otherwise fall back
+  // to splitting at each "Freight Ops Update"/"Watchlist Update" line so that
+  // multiple reports pasted together still split cleanly.
+  const chunks = /Sent using @Claude/i.test(raw)
+    ? raw.split(/Sent using @Claude/gi)
+    : raw.split(/(?=^\s*(?:Freight Ops Update|Watchlist Update)\b)/gim)
+
   const blocks: ReportBlock[] = []
   for (const chunk of chunks) {
     const trimmed = chunk.trim()
     if (!trimmed) continue
     const headerLine = findReportHeader(trimmed)
-    if (!headerLine) continue
-    const kind = headerLine.includes("Watchlist Update")
+    if (!headerLine) {
+      // If the chunk still contains recognizable sections, keep it as Unknown.
+      if (containsAnySectionHeader(trimmed)) {
+        blocks.push({
+          kind: "Unknown",
+          headerLine: "",
+          text: trimmed,
+          timestamp: null,
+        })
+      }
+      continue
+    }
+    const kind = /Watchlist Update/i.test(headerLine)
       ? "Watchlist Update"
-      : headerLine.includes("Freight Ops Update")
+      : /Freight Ops Update/i.test(headerLine)
         ? "Freight Ops Update"
         : "Unknown"
     blocks.push({
@@ -122,9 +183,6 @@ function splitIntoReports(raw: string): ReportBlock[] {
 }
 
 function findReportHeader(text: string): string | null {
-  // Header lines look like "Freight Ops Update — Fri 4/10 1:10 PM CT" or
-  // "Watchlist Update — Fri 4/10 11:10 AM CT", possibly with a timestamp
-  // prefix like "[1:12 PM]chris sturma " from a Slack copy-paste.
   const lines = text.split(/\r?\n/)
   for (const line of lines) {
     if (/Freight Ops Update/i.test(line) || /Watchlist Update/i.test(line)) {
@@ -134,19 +192,22 @@ function findReportHeader(text: string): string | null {
   return null
 }
 
+function containsAnySectionHeader(text: string): boolean {
+  const lines = text.split(/\r?\n/).map((l) => l.trim())
+  return lines.some((l) => matchSectionHeader(l) !== null)
+}
+
 function pickLatest(
   blocks: ReportBlock[],
   kind: ReportBlock["kind"],
 ): ReportBlock | null {
   const filtered = blocks.filter((b) => b.kind === kind)
   if (filtered.length === 0) return null
-  // Reports are pasted in chronological order (oldest first); grab the last one.
   return filtered[filtered.length - 1]
 }
 
-function extractTimestamp(headerLine: string): string | null {
-  // e.g. "Freight Ops Update — Fri 4/10 1:10 PM CT"
-  const match = headerLine.match(
+function extractTimestamp(text: string): string | null {
+  const match = text.match(
     /(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i,
   )
   if (!match) return null
@@ -176,7 +237,15 @@ function extractSections(text: string): Map<SectionHeader, ParsedSection> {
     const line = rawLine.trim()
     const headerMatch = matchSectionHeader(line)
     if (headerMatch) {
-      if (current) out.set(current.header, current)
+      if (current) {
+        // If we already have this canonical header, append rather than overwrite.
+        const existing = out.get(current.header)
+        if (existing) {
+          existing.lines.push(...current.lines)
+        } else {
+          out.set(current.header, current)
+        }
+      }
       current = { header: headerMatch, headerLine: line, lines: [] }
       continue
     }
@@ -184,23 +253,35 @@ function extractSections(text: string): Map<SectionHeader, ParsedSection> {
       current.lines.push(line)
     }
   }
-  if (current) out.set(current.header, current)
+  if (current) {
+    const existing = out.get(current.header)
+    if (existing) existing.lines.push(...current.lines)
+    else out.set(current.header, current)
+  }
   return out
 }
 
 function matchSectionHeader(line: string): SectionHeader | null {
-  // Strip leading Slack emoji codes like ":rotating_light:" so headers with a
-  // warning emoji still match.
-  const stripped = line.replace(/^:[a-z_]+:\s*/i, "")
+  // Strip leading Slack emoji codes like ":rotating_light:" or unicode emoji.
+  const stripped = line
+    .replace(/^(?::[a-z_0-9]+:\s*)+/gi, "")
+    .replace(/^[\p{Extended_Pictographic}\u{1F300}-\u{1FAFF}\u2600-\u27BF]+\s*/gu, "")
+    .replace(/^#{1,6}\s*/, "") // markdown headings
+    .replace(/^[•*\-]\s+/, "") // bullet markers
+    .trim()
   for (const h of SECTION_HEADERS) {
-    // Match "TMS Uncovered Loads" followed by "(...)" optional and trailing ":"
-    const re = new RegExp(
-      `^${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b.*:?$`,
-      "i",
-    )
-    if (re.test(stripped)) return h
+    // Match at the start of the line, followed by optional "(...)" group and
+    // optional trailing ":" — nothing else required.
+    const re = new RegExp(`^${escapeRegex(h)}\\b`, "i")
+    if (re.test(stripped)) {
+      return CANONICAL[h] ?? h
+    }
   }
   return null
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 // ---- Metric extraction ----------------------------------------------------
@@ -219,8 +300,6 @@ function buildMetrics(
   const cancels = sections.get("Carrier Cancellations/Falloffs")
   const hot = sections.get("IMCC HOT CONTAINERS")
 
-  // Critical: count ":rotating_light:" flagged items across all action lists,
-  // plus the CRITICAL line inside TMS Uncovered Loads.
   let critical = countRotatingLight(actionItems?.lines ?? [])
   critical += countRotatingLight(watchlistActions?.lines ?? [])
   if (uncovered) {
@@ -228,7 +307,6 @@ function buildMetrics(
     if (criticalLine) critical += countLoadIdsInLine(criticalLine)
   }
 
-  // Urgent: non-rotating-light action items + URGENT line in uncovered.
   let urgent =
     (actionItems?.lines.length ?? 0) - countRotatingLight(actionItems?.lines ?? [])
   urgent += Math.max(
@@ -241,26 +319,21 @@ function buildMetrics(
     if (urgentLine) urgent += countLoadIdsInLine(urgentLine)
   }
 
-  // Uncovered: explicit total from header "(~156 total)" if present.
   const uncoveredCount = uncovered
     ? extractParenTotal(uncovered.headerLine) ?? uncovered.lines.length
     : 0
 
-  // Quotes: new quote count + $0-pricing count.
   const quoteCount =
     (quotes?.lines.length ?? 0) +
     (pricing ? extractParenTotal(pricing.headerLine) ?? pricing.lines.length : 0)
 
-  // New loads: Load Tenders + explicit "NEW" hot container entries + "NEW DO"s.
   const tenderCount = tenders?.lines.length ?? 0
   const newHot = (hot?.lines ?? []).filter((l) => /\bNEW\b/i.test(l)).length
   const newLoads = tenderCount + newHot
 
-  // Cancels/tracking: simple bullet counts.
   const cancelCount = cancels?.lines.length ?? 0
   const trackingCount = updates?.lines.length ?? 0
 
-  // Billing gaps: count any mention of POD/invoice/BOL in the cumulative report text.
   const billingGaps = countBillingMentions(sections)
 
   if (uncoveredCount === 0 && !uncovered) {
@@ -280,14 +353,15 @@ function buildMetrics(
 }
 
 function countRotatingLight(lines: string[]): number {
-  return lines.filter((l) => /:rotating_light:|^🚨/.test(l)).length
+  return lines.filter((l) => /:rotating_light:|🚨/.test(l)).length
 }
 
 function countLoadIdsInLine(line: string): number {
-  // Lines like "CRITICAL (PU today 4/10): 128619806 ... | 128614983 ..." —
-  // count pipe-separated groups as approximate item count.
   const afterColon = line.split(/:\s/).slice(1).join(": ")
-  const groups = afterColon.split("|").map((g) => g.trim()).filter(Boolean)
+  const groups = afterColon
+    .split("|")
+    .map((g) => g.trim())
+    .filter(Boolean)
   return groups.length
 }
 
@@ -327,7 +401,7 @@ function buildDetails(
   const actions = sections.get("Top Action Items")?.lines ?? []
   const watchlistActions = sections.get("Watchlist Action Items")?.lines ?? []
   for (const line of [...actions, ...watchlistActions]) {
-    const isCritical = /:rotating_light:|^🚨/.test(line)
+    const isCritical = /:rotating_light:|🚨/.test(line)
     const cleaned = cleanLine(line)
     const item: AlertItem = {
       id: hashId(cleaned),
@@ -345,7 +419,6 @@ function buildDetails(
   if (uncoveredSection) {
     for (const line of uncoveredSection.lines) {
       const category = line.match(/^(CRITICAL|URGENT|UPCOMING|STALE)/i)?.[1]
-      // Split grouped lines on "|" into individual load-ish chunks.
       const chunks = line
         .replace(/^(CRITICAL|URGENT|UPCOMING|STALE)[^:]*:\s*/i, "")
         .split("|")
@@ -422,7 +495,6 @@ function buildDetails(
     })
   }
 
-  // Billing gaps: pull from all text mentioning POD/invoice/TONU.
   const combined = [
     ...Array.from(sections.values()).flatMap((s) => s.lines),
     ...watchlistText.split(/\r?\n/).map((l) => l.trim()),
@@ -457,14 +529,12 @@ function buildDetails(
 
 function cleanLine(line: string): string {
   return line
-    .replace(/:[a-z_]+:/gi, "")
+    .replace(/:[a-z_0-9]+:/gi, "")
     .replace(/\s+/g, " ")
     .trim()
 }
 
 function hashId(s: string): string {
-  // Simple deterministic id based on line content so repeated parses
-  // don't churn ids unnecessarily.
   let h = 0
   for (let i = 0; i < s.length; i++) {
     h = (h << 5) - h + s.charCodeAt(i)
@@ -474,7 +544,6 @@ function hashId(s: string): string {
 }
 
 function extractOrigin(line: string): string | null {
-  // Patterns like "Wilmington CA → Memphis" or "New Iberia → Brewton AL"
   const m = line.match(/([A-Z][A-Za-z.\s]+(?:\s[A-Z]{2})?)\s*(?:→|->|to)\s*/)
   return m ? m[1].trim() : null
 }
@@ -492,9 +561,8 @@ function extractRate(line: string): number | undefined {
 }
 
 function extractFrom(line: string): string | null {
-  // First name-looking token like "Parker Morris" or "Saadiah"
   const m = line.match(
-    /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)(?=\s+(?:confirmed|said|asked|sent|quoting|replied|wrote|escalated|requested|requesting|requesting))/,
+    /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)(?=\s+(?:confirmed|said|asked|sent|quoting|replied|wrote|escalated|requested|requesting))/,
   )
   return m ? m[1] : null
 }
