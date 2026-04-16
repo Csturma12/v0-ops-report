@@ -1,21 +1,30 @@
-// Cron endpoint to sync all integrations
-// Schedule: 0 */2 * * * (every 2 hours)
+// Cron endpoint to sync all integrations — runs hourly via vercel.json.
 import { NextResponse } from "next/server"
-import type { OpsMetrics, OpsDetails, SyncResult, AlertItem, LoadItem, QuoteItem } from "@/lib/types/ops"
+import type {
+  OpsMetrics,
+  OpsDetails,
+  SyncResult,
+  AlertItem,
+  LoadItem,
+  QuoteItem,
+} from "@/lib/types/ops"
 import { syncTAI, isConfigured as taiConfigured } from "@/lib/integrations/tai"
 import { syncGmail, isConfigured as gmailConfigured } from "@/lib/integrations/gmail"
-import { syncTruckstop, isConfigured as truckstopConfigured } from "@/lib/integrations/truckstop"
+import {
+  syncTruckstop,
+  isConfigured as truckstopConfigured,
+} from "@/lib/integrations/truckstop"
 import { syncSlack, isConfigured as slackConfigured } from "@/lib/integrations/slack"
+import { writeSnapshot } from "@/lib/store/ops-store"
 
-// In-memory cache for latest sync results (in production, use Redis or KV)
-let lastSyncResult: SyncResult | null = null
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export async function GET(request: Request) {
   // Verify cron secret for security
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET
 
-  // Allow requests from Vercel cron (has special header) or with correct secret
   const isVercelCron = request.headers.get("x-vercel-cron") === "true"
   const hasValidSecret = cronSecret && authHeader === `Bearer ${cronSecret}`
 
@@ -28,7 +37,6 @@ export async function GET(request: Request) {
   const allLoads: LoadItem[] = []
   const allQuotes: QuoteItem[] = []
 
-  // Sync TAI TMS
   let taiResult = null
   if (taiConfigured()) {
     try {
@@ -40,7 +48,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Sync Slack
   let slackResult = null
   if (slackConfigured()) {
     try {
@@ -52,7 +59,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Sync Gmail
   let gmailResult = null
   if (gmailConfigured()) {
     try {
@@ -63,35 +69,39 @@ export async function GET(request: Request) {
     }
   }
 
-  // Sync Truckstop
   let truckstopResult = null
   if (truckstopConfigured()) {
     try {
       truckstopResult = await syncTruckstop()
       allLoads.push(...truckstopResult.postedLoads)
     } catch (error) {
-      errors.push(`Truckstop: ${error instanceof Error ? error.message : "Unknown error"}`)
+      errors.push(
+        `Truckstop: ${error instanceof Error ? error.message : "Unknown error"}`,
+      )
     }
   }
 
-  // Calculate metrics
-  const criticalAlerts = allAlerts.filter(a => a.priority === "critical")
-  const urgentAlerts = allAlerts.filter(a => a.priority === "high" && a.type === "urgent")
-  const uncoveredLoads = allLoads.filter(l => l.status === "uncovered")
-  const newLoads = allLoads.filter(l => l.status === "new")
-  const cancelledLoads = allLoads.filter(l => l.status === "cancelled")
-  const inTransitLoads = allLoads.filter(l => l.status === "in_transit")
+  const criticalAlerts = allAlerts.filter((a) => a.priority === "critical")
+  const urgentAlerts = allAlerts.filter(
+    (a) => a.priority === "high" && a.type === "urgent",
+  )
+  const uncoveredLoads = allLoads.filter((l) => l.status === "uncovered")
+  const newLoads = allLoads.filter((l) => l.status === "new")
+  const cancelledLoads = allLoads.filter((l) => l.status === "cancelled")
+  const inTransitLoads = allLoads.filter((l) => l.status === "in_transit")
+
+  const now = new Date().toISOString()
 
   const metrics: OpsMetrics = {
     critical: criticalAlerts.length,
     urgent: urgentAlerts.length,
     uncovered: uncoveredLoads.length,
     newLoads: newLoads.length,
-    quotes: allQuotes.filter(q => q.status === "open").length,
+    quotes: allQuotes.filter((q) => q.status === "open").length,
     cancels: cancelledLoads.length,
     tracking: inTransitLoads.length,
     billingGaps: taiResult?.billingGaps.length || 0,
-    lastSynced: new Date().toISOString(),
+    lastSynced: now,
   }
 
   const details: OpsDetails = {
@@ -99,7 +109,7 @@ export async function GET(request: Request) {
     urgentItems: urgentAlerts,
     uncoveredLoads,
     newLoadItems: newLoads,
-    quoteRequests: allQuotes.filter(q => q.status === "open"),
+    quoteRequests: allQuotes.filter((q) => q.status === "open"),
     cancelledShipments: cancelledLoads,
     trackingUpdates: taiResult?.tracking || [],
     billingGapItems: taiResult?.billingGaps || [],
@@ -107,24 +117,23 @@ export async function GET(request: Request) {
 
   const result: SyncResult = {
     success: errors.length === 0,
-    timestamp: new Date().toISOString(),
+    timestamp: now,
     metrics,
     details,
     errors: errors.length > 0 ? errors : undefined,
   }
 
-  // Cache the result
-  lastSyncResult = result
+  // Persist to Redis so the dashboard sees the new data.
+  await writeSnapshot({
+    metrics,
+    details,
+    source: "sync",
+    updatedAt: now,
+  })
 
   return NextResponse.json(result)
 }
 
-// Export for use by the data endpoint
-export function getLastSyncResult(): SyncResult | null {
-  return lastSyncResult
-}
-
-// Allow manual trigger via POST
 export async function POST(request: Request) {
   return GET(request)
 }
