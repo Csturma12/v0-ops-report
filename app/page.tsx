@@ -1,65 +1,43 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import useSWR from "swr"
 import { SidebarNav } from "@/components/freight/sidebar-nav"
 import { OpsStats } from "@/components/freight/ops-stats"
 import { AIBrief } from "@/components/freight/ai-brief"
 import { ManualEntryForm } from "@/components/freight/manual-entry-form"
+import {
+  DetailDrawer,
+  type SectionKey,
+} from "@/components/freight/detail-drawer"
 import { Button } from "@/components/ui/button"
 import { Menu, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
 import type { OpsDataResponse, OpsMetrics } from "@/lib/types/ops"
+
+const fetcher = async (url: string): Promise<OpsDataResponse> => {
+  const res = await fetch(url, { cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to fetch ops data")
+  return res.json()
+}
 
 export default function OpsOverview() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [dateTime, setDateTime] = useState({ date: "", time: "" })
   const [syncing, setSyncing] = useState(false)
-  const [data, setData] = useState<OpsDataResponse | null>(null)
-  const [error, setError] = useState<Error | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [activeSection, setActiveSection] = useState<SectionKey | null>(null)
 
-  // Fetch ops data (try manual endpoint first, fall back to integrations)
-  const fetchData = useCallback(async () => {
-    try {
-      // First check for manually entered data
-      const manualRes = await fetch("/api/ops/manual")
-      const manualData = await manualRes.json()
-      
-      if (manualData.success && manualData.metrics) {
-        setData({
-          metrics: manualData.metrics,
-          integrationStatus: {
-            slack: { connected: false, lastSync: null },
-            gmail: { connected: false, lastSync: null },
-            tai: { connected: true, lastSync: manualData.metrics.lastUpdated },
-            truckstop: { connected: false, lastSync: null },
-          }
-        })
-        setError(null)
-        setIsLoading(false)
-        return
-      }
+  // SWR auto-refreshes every 60s so the site picks up new hourly data quickly.
+  const { data, error, isLoading, mutate } = useSWR<OpsDataResponse>(
+    "/api/ops/data",
+    fetcher,
+    {
+      refreshInterval: 60_000,
+      revalidateOnFocus: true,
+      keepPreviousData: true,
+    },
+  )
 
-      // Fall back to integration data
-      const res = await fetch("/api/ops/data")
-      if (!res.ok) throw new Error("Failed to fetch")
-      const json = await res.json()
-      setData(json)
-      setError(null)
-    } catch (err) {
-      setError(err as Error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // Initial fetch and auto-refresh every 5 minutes
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [fetchData])
-
-  // Set date/time on client only to avoid hydration mismatch
+  // Client-only clock to avoid hydration mismatch.
   useEffect(() => {
     const updateTime = () => {
       const now = new Date()
@@ -79,54 +57,60 @@ export default function OpsOverview() {
       })
     }
     updateTime()
-    const interval = setInterval(updateTime, 60000)
+    const interval = setInterval(updateTime, 60_000)
     return () => clearInterval(interval)
   }, [])
 
-  // Manual sync trigger
   const handleSync = useCallback(async () => {
     setSyncing(true)
     try {
       await fetch("/api/sync", { method: "POST" })
-      await fetchData()
+      await mutate()
     } catch (err) {
-      console.error("Sync failed:", err)
+      console.error("[v0] Sync failed:", err)
     } finally {
       setSyncing(false)
     }
-  }, [fetchData])
+  }, [mutate])
 
-  // Manual entry save handler
-  const handleManualSave = useCallback((metrics: OpsMetrics) => {
-    setData(prev => ({
-      metrics,
-      details: prev?.details,
-      integrationStatus: prev?.integrationStatus ?? {
-        slack: { connected: false, lastSync: null },
-        gmail: { connected: false, lastSync: null },
-        tai: { connected: false, lastSync: null },
-        truckstop: { connected: false, lastSync: null },
-      }
-    }))
-  }, [])
+  const handleManualSave = useCallback(
+    async (metrics: OpsMetrics) => {
+      await fetch("/api/ops/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...metrics, source: "manual" }),
+      })
+      await mutate()
+    },
+    [mutate],
+  )
 
-  // Format last synced time
-  const lastSyncedText = data?.metrics.lastSynced
-    ? `Last synced: ${new Date(data.metrics.lastSynced).toLocaleTimeString()}`
-    : "Not synced yet"
+  const metrics = data?.metrics
+  const lastSyncedText = metrics?.lastSynced
+    ? `Last synced: ${new Date(metrics.lastSynced).toLocaleTimeString()}`
+    : "Waiting for first sync"
 
-  // Count connected integrations
   const connectedCount = data?.integrationStatus
-    ? Object.values(data.integrationStatus).filter(s => s.connected).length
+    ? Object.values(data.integrationStatus).filter((s) => s.connected).length
     : 0
+
+  const activeCount =
+    activeSection && metrics
+      ? (metrics[activeSection] as number | undefined) ?? 0
+      : 0
 
   return (
     <div className="min-h-screen bg-background">
       <div className="flex min-h-screen">
-        <SidebarNav open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <SidebarNav
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          metrics={metrics}
+          activeSection={activeSection}
+          onSectionClick={setActiveSection}
+        />
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile Header */}
           <header className="lg:hidden flex items-center h-12 px-4 border-b border-border">
             <Button
               variant="ghost"
@@ -139,18 +123,17 @@ export default function OpsOverview() {
           </header>
 
           <main className="flex-1 p-4 lg:p-8 overflow-auto">
-            {/* Page Title with Sync Controls */}
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight uppercase">
                   OPS OVERVIEW
                 </h1>
-
-                {/* Subtitle with metadata */}
                 <p className="text-xs text-muted-foreground mt-2 flex flex-wrap items-center gap-1">
                   <span className="text-blue-400">Mythos</span>
                   <span className="text-muted-foreground/50">·</span>
-                  <span className="text-yellow-500">{dateTime.date || "Loading..."}</span>
+                  <span className="text-yellow-500">
+                    {dateTime.date || "Loading..."}
+                  </span>
                   <span className="text-muted-foreground/50">·</span>
                   <span className="text-yellow-500">{dateTime.time}</span>
                   <span className="text-muted-foreground/50">·</span>
@@ -158,7 +141,6 @@ export default function OpsOverview() {
                 </p>
               </div>
 
-              {/* Sync Status & Refresh */}
               <div className="flex items-center gap-3 shrink-0">
                 <div className="text-right hidden sm:block">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -173,9 +155,9 @@ export default function OpsOverview() {
                     {lastSyncedText}
                   </p>
                 </div>
-                <ManualEntryForm 
-                  currentMetrics={data?.metrics} 
-                  onSave={handleManualSave} 
+                <ManualEntryForm
+                  currentMetrics={metrics}
+                  onSave={handleManualSave}
                 />
                 <Button
                   variant="outline"
@@ -184,34 +166,42 @@ export default function OpsOverview() {
                   onClick={handleSync}
                   disabled={syncing}
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+                  />
                   <span className="hidden sm:inline">Sync</span>
                 </Button>
               </div>
             </div>
 
-            {/* Error State */}
             {error && (
               <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
                 Failed to load ops data. Please try refreshing.
               </div>
             )}
 
-            {/* Stats Cards */}
             <div className="mt-6">
-              <OpsStats metrics={data?.metrics} loading={isLoading} />
+              <OpsStats
+                metrics={metrics}
+                loading={isLoading && !data}
+                onSectionClick={setActiveSection}
+              />
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Tip: click any metric to review the underlying items.
+              </p>
             </div>
 
-            {/* Integration Status (small) */}
             {data?.integrationStatus && (
               <div className="mt-4 flex flex-wrap gap-2 text-[10px]">
-                <span className="text-muted-foreground uppercase tracking-wider">Streams from:</span>
+                <span className="text-muted-foreground uppercase tracking-wider">
+                  Streams from:
+                </span>
                 {Object.entries(data.integrationStatus).map(([name, status]) => (
                   <span
                     key={name}
                     className={`px-1.5 py-0.5 rounded ${
-                      status.connected 
-                        ? "bg-emerald-500/10 text-emerald-500" 
+                      status.connected
+                        ? "bg-emerald-500/10 text-emerald-500"
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -221,11 +211,18 @@ export default function OpsOverview() {
               </div>
             )}
 
-            {/* AI Brief Section */}
-            <AIBrief metrics={data?.metrics} />
+            <AIBrief metrics={metrics} />
           </main>
         </div>
       </div>
+
+      <DetailDrawer
+        section={activeSection}
+        details={data?.details}
+        count={activeCount}
+        lastUpdated={metrics?.lastSynced}
+        onClose={() => setActiveSection(null)}
+      />
     </div>
   )
 }
