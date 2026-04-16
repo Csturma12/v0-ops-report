@@ -80,7 +80,18 @@ export default function OpsOverview() {
     } finally {
       setSyncing(false)
     }
-  }, [mutate])
+  }, [mutate, mutateHistory])
+
+  const handleSeedDemo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ops/seed", { method: "POST" })
+      if (res.ok) {
+        await Promise.all([mutate(), mutateHistory()])
+      }
+    } catch (err) {
+      console.error("[v0] Seed failed:", err)
+    }
+  }, [mutate, mutateHistory])
 
   const handleManualSave = useCallback(
     async (metrics: OpsMetrics) => {
@@ -186,6 +197,34 @@ export default function OpsOverview() {
             {error && (
               <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
                 Failed to load ops data. Please try refreshing.
+              </div>
+            )}
+
+            {!isLoading && metrics && !metrics.lastSynced && (
+              <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      No data yet
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Your hourly Claude report will POST to{" "}
+                      <code className="px-1 py-0.5 rounded bg-muted text-foreground font-mono text-[11px]">
+                        /api/ops/manual
+                      </code>
+                      . Until then, load sample data to preview the dashboard and
+                      drawers.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0"
+                    onClick={handleSeedDemo}
+                  >
+                    Load Sample Data
+                  </Button>
+                </div>
               </div>
             )}
 
