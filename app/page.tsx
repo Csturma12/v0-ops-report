@@ -13,11 +13,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Menu, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
 import type { OpsDataResponse, OpsMetrics } from "@/lib/types/ops"
+import type { OpsHistoryPoint } from "@/lib/store/ops-store"
 
-const fetcher = async (url: string): Promise<OpsDataResponse> => {
+const fetcher = async <T,>(url: string): Promise<T> => {
   const res = await fetch(url, { cache: "no-store" })
-  if (!res.ok) throw new Error("Failed to fetch ops data")
-  return res.json()
+  if (!res.ok) throw new Error(`Failed to fetch ${url}`)
+  return res.json() as Promise<T>
 }
 
 export default function OpsOverview() {
@@ -36,6 +37,14 @@ export default function OpsOverview() {
       keepPreviousData: true,
     },
   )
+
+  // History (last 24 hourly points) for the trend sparkline inside the drawer.
+  const { data: historyData, mutate: mutateHistory } = useSWR<{
+    points: OpsHistoryPoint[]
+  }>("/api/ops/history", fetcher, {
+    refreshInterval: 60_000,
+    keepPreviousData: true,
+  })
 
   // Client-only clock to avoid hydration mismatch.
   useEffect(() => {
@@ -65,7 +74,7 @@ export default function OpsOverview() {
     setSyncing(true)
     try {
       await fetch("/api/sync", { method: "POST" })
-      await mutate()
+      await Promise.all([mutate(), mutateHistory()])
     } catch (err) {
       console.error("[v0] Sync failed:", err)
     } finally {
@@ -80,9 +89,9 @@ export default function OpsOverview() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...metrics, source: "manual" }),
       })
-      await mutate()
+      await Promise.all([mutate(), mutateHistory()])
     },
-    [mutate],
+    [mutate, mutateHistory],
   )
 
   const metrics = data?.metrics
@@ -221,6 +230,7 @@ export default function OpsOverview() {
         details={data?.details}
         count={activeCount}
         lastUpdated={metrics?.lastSynced}
+        history={historyData?.points}
         onClose={() => setActiveSection(null)}
       />
     </div>

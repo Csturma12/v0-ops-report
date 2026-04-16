@@ -18,6 +18,8 @@ import type {
 } from "@/lib/types/ops"
 import { AlertTriangle, Inbox } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Sparkline } from "./sparkline"
+import type { OpsHistoryPoint } from "@/lib/store/ops-store"
 
 export type SectionKey =
   | "critical"
@@ -80,7 +82,19 @@ interface DetailDrawerProps {
   details?: OpsDetails
   count: number
   lastUpdated?: string | null
+  history?: OpsHistoryPoint[]
   onClose: () => void
+}
+
+const ACCENT_TO_TREND: Record<SectionKey, string> = {
+  critical: "text-red-500",
+  urgent: "text-yellow-500",
+  uncovered: "text-emerald-500",
+  newLoads: "text-blue-500",
+  quotes: "text-purple-500",
+  cancels: "text-gray-400",
+  tracking: "text-cyan-500",
+  billingGaps: "text-lime-500",
 }
 
 export function DetailDrawer({
@@ -88,6 +102,7 @@ export function DetailDrawer({
   details,
   count,
   lastUpdated,
+  history,
   onClose,
 }: DetailDrawerProps) {
   const meta = section ? SECTION_META[section] : null
@@ -119,6 +134,20 @@ export function DetailDrawer({
         </SheetHeader>
 
         <div className="px-4 pb-8">
+          {section && history && history.length > 0 && (
+            <div className="py-4 border-b border-border">
+              <Sparkline
+                values={history.map((p) => p[section])}
+                labels={history.map((p) =>
+                  new Date(p.timestamp).toLocaleTimeString([], {
+                    hour: "numeric",
+                    hour12: true,
+                  }),
+                )}
+                colorClass={ACCENT_TO_TREND[section]}
+              />
+            </div>
+          )}
           {section && <DetailBody section={section} details={details} />}
         </div>
       </SheetContent>
