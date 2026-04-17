@@ -94,6 +94,36 @@ export async function POST(req: Request) {
 
   try {
     const parsed = parseFreightReport(text)
+
+    // If the parse came back empty, log the first 2KB of raw text so we can
+    // see exactly what format was sent and fix the parser.
+    const itemTotal =
+      parsed.details.criticalItems.length +
+      parsed.details.urgentItems.length +
+      parsed.details.uncoveredLoads.length +
+      parsed.details.newLoadItems.length +
+      parsed.details.quoteRequests.length +
+      parsed.details.cancelledShipments.length +
+      parsed.details.trackingUpdates.length +
+      parsed.details.billingGapItems.length
+    const metricTotal =
+      parsed.metrics.critical +
+      parsed.metrics.urgent +
+      parsed.metrics.uncovered +
+      parsed.metrics.newLoads +
+      parsed.metrics.quotes +
+      parsed.metrics.cancels +
+      parsed.metrics.tracking +
+      parsed.metrics.billingGaps
+
+    if (itemTotal === 0 && metricTotal === 0) {
+      console.warn(
+        "[v0] /api/ingest/paste parsed zero items — raw text preview (first 2KB):\n" +
+          text.slice(0, 2048),
+      )
+      console.warn("[v0] parser warnings:", parsed.warnings)
+    }
+
     const ok = await writeSnapshot({
       metrics: parsed.metrics,
       details: parsed.details,
