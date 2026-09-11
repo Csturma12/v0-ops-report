@@ -47,7 +47,7 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div
-        className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-foreground/25 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
@@ -57,7 +57,7 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
             <p className="truncate font-mono text-sm font-semibold text-foreground">
               {shipment?.ref_number || shipment?.shipment_id || shipmentId}
             </p>
-            <p className="text-xs text-muted-foreground">Shipment detail</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Shipment detail</p>
           </div>
           <button
             type="button"
@@ -85,13 +85,13 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
                 )}
               </div>
 
-              <div className="rounded border border-border bg-background/40 p-3">
+              <div className="rounded-lg border border-border bg-muted/50 p-3">
                 <div className="flex items-center gap-2 text-sm text-foreground">
                   <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-medium">{lane(shipment)}</span>
                 </div>
                 {shipment.current_location && (
-                  <p className="mt-1.5 pl-5 text-xs text-sky-300">Currently: {shipment.current_location}</p>
+                  <p className="mt-1.5 pl-5 font-mono text-xs text-sky-600">Currently: {shipment.current_location}</p>
                 )}
               </div>
 
@@ -118,14 +118,14 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
               </dl>
 
               {shipment.last_status_note && (
-                <div className="rounded border border-border bg-background/40 p-3 text-sm text-foreground">
-                  <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Latest note</p>
+                <div className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
+                  <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Latest note</p>
                   {shipment.last_status_note}
                 </div>
               )}
 
               <div>
-                <h3 className="mb-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
                   Event Timeline ({events.length})
                 </h3>
                 {events.length === 0 ? (
@@ -135,7 +135,7 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
                     {events.map((e, i) => (
                       <li key={e.id} className="relative flex gap-3 pb-4 last:pb-0">
                         <div className="flex flex-col items-center">
-                          <span className="mt-1 h-2 w-2 rounded-full bg-sky-400" />
+                          <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
                           {i < events.length - 1 && <span className="w-px flex-1 bg-border" />}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -144,7 +144,7 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
                           </p>
                           {e.location && <p className="text-xs text-muted-foreground">{e.location}</p>}
                           {e.note && <p className="mt-0.5 text-xs text-muted-foreground">{e.note}</p>}
-                          <p className="mt-0.5 text-[10px] text-muted-foreground/70">{when(e.occurred_at)}</p>
+                          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">{when(e.occurred_at)}</p>
                         </div>
                       </li>
                     ))}
@@ -192,9 +192,9 @@ function LiveTaiSection({ shipmentId }: { shipmentId: string }) {
   }
 
   return (
-    <div className="rounded border border-sky-500/20 bg-sky-500/5 p-3">
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300">
+        <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary">
           <Satellite className="h-3 w-3" />
           Live from TAI
         </div>
@@ -217,7 +217,7 @@ function LiveTaiSection({ shipmentId }: { shipmentId: string }) {
       )}
 
       {state.phase === "error" && (
-        <div className="mt-2 flex items-start gap-1.5 text-xs text-yellow-500">
+        <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-700">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             {state.status === 401 || state.status === 403 ? "TAI rejected credentials — " : ""}
@@ -231,7 +231,7 @@ function LiveTaiSection({ shipmentId }: { shipmentId: string }) {
           {state.detail !== null && (
             <details className="text-xs" open>
               <summary className="cursor-pointer text-muted-foreground">Shipment detail (raw)</summary>
-              <pre className="mt-1 max-h-48 overflow-auto rounded bg-background/60 p-2 font-mono text-[10px] text-foreground">
+              <pre className="mt-1 max-h-48 overflow-auto rounded bg-muted p-2 font-mono text-[10px] text-foreground">
                 {JSON.stringify(state.detail, null, 2)}
               </pre>
             </details>
@@ -239,7 +239,7 @@ function LiveTaiSection({ shipmentId }: { shipmentId: string }) {
           {state.tracking !== null && (
             <details className="text-xs">
               <summary className="cursor-pointer text-muted-foreground">Tracking / location history (raw)</summary>
-              <pre className="mt-1 max-h-48 overflow-auto rounded bg-background/60 p-2 font-mono text-[10px] text-foreground">
+              <pre className="mt-1 max-h-48 overflow-auto rounded bg-muted p-2 font-mono text-[10px] text-foreground">
                 {JSON.stringify(state.tracking, null, 2)}
               </pre>
             </details>
@@ -264,7 +264,7 @@ function Field({
 }) {
   return (
     <div>
-      <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <dt className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
         {Icon && <Icon className="h-3 w-3" />}
         {label}
       </dt>

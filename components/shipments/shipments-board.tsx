@@ -68,11 +68,11 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
   }, [shipments, filter, query])
 
   return (
-    <div className="rounded border border-border bg-card">
+    <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground">
+        <h2 className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.15em] text-foreground">
           Live Shipments
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal tabular-nums text-muted-foreground">
             {rows.length}
           </span>
         </h2>
@@ -82,7 +82,7 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search ref, customer, carrier, lane…"
-            className="h-8 w-full rounded border border-border bg-background pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-foreground/30 focus:outline-none"
+            className="h-8 w-full rounded border border-border bg-background pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
           />
         </div>
       </div>
@@ -106,7 +106,7 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Ref</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Lane</th>
@@ -127,7 +127,7 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
                   <tr
                     key={s.id}
                     onClick={() => onOpen(s.shipment_id)}
-                    className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-foreground/5"
+                    className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/60"
                   >
                     <td className="px-4 py-2.5">
                       <span className="font-mono text-xs font-medium text-foreground">
@@ -144,7 +144,7 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
                         <span>{d}</span>
                       </span>
                       {s.current_location && (
-                        <span className="mt-0.5 block text-[11px] text-sky-300">{s.current_location}</span>
+                        <span className="mt-0.5 block font-mono text-[11px] text-sky-600">{s.current_location}</span>
                       )}
                     </td>
                     <td className="hidden px-4 py-2.5 text-xs text-muted-foreground md:table-cell">
@@ -162,18 +162,18 @@ export function ShipmentsBoard({ shipments, filter, onOpen, loading }: Props) {
                           margin === null
                             ? "text-muted-foreground/60"
                             : margin <= 0
-                              ? "text-red-300"
-                              : "text-emerald-300"
+                              ? "text-primary"
+                              : "text-emerald-600"
                         }`}
                       >
                         {money(margin)}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-right text-[11px] text-muted-foreground">
+                    <td className="px-4 py-2.5 text-right font-mono text-[11px] text-muted-foreground">
                       {relative(s.updated_at)}
                     </td>
                     <td className="px-2 py-2.5">
-                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-colors group-hover:text-foreground" />
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-colors group-hover:text-primary" />
                     </td>
                   </tr>
                 )

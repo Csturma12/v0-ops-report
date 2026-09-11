@@ -55,14 +55,14 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-foreground/25 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <aside className="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl">
         <header className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
-            <Calculator className="h-4 w-4 text-sky-400" />
+            <Calculator className="h-4 w-4 text-primary" />
             <div>
               <p className="text-sm font-semibold text-foreground">LTL Rate Quote</p>
-              <p className="text-xs text-muted-foreground">TAI getRateQuote · live carrier pricing</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">TAI getRateQuote · live carrier pricing</p>
             </div>
           </div>
           <button
@@ -78,7 +78,7 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-auto px-5 py-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                 Origin ZIP
               </span>
               <input
@@ -86,11 +86,11 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setOrigin(e.target.value)}
                 placeholder="30301"
                 inputMode="numeric"
-                className="w-full rounded border border-border bg-background px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-sky-500"
+                className="w-full rounded border border-border bg-background px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-primary"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                 Destination ZIP
               </span>
               <input
@@ -98,17 +98,17 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setDest(e.target.value)}
                 placeholder="60601"
                 inputMode="numeric"
-                className="w-full rounded border border-border bg-background px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-sky-500"
+                className="w-full rounded border border-border bg-background px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-primary"
               />
             </label>
           </div>
 
           <div className="mt-5 flex items-center justify-between">
-            <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground">Commodities</h3>
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Commodities</h3>
             <button
               type="button"
               onClick={() => setCommodities((p) => [...p, emptyCommodity()])}
-              className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
+              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80"
             >
               <Plus className="h-3 w-3" /> Add
             </button>
@@ -116,7 +116,7 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
 
           <div className="mt-2 space-y-3">
             {commodities.map((c, i) => (
-              <div key={i} className="rounded border border-border bg-background/40 p-3">
+              <div key={i} className="rounded-lg border border-border bg-muted/50 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-foreground">Item {i + 1}</span>
                   {commodities.length > 1 && (
@@ -159,7 +159,7 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
             <div className="mt-5">
               {result.ok ? (
                 result.quotes.length === 0 ? (
-                  <p className="rounded border border-border bg-background/40 p-3 text-sm text-muted-foreground">
+                  <p className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
                     No carrier rates returned for this lane.
                   </p>
                 ) : (
@@ -170,8 +170,8 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
                   </ol>
                 )
               ) : (
-                <div className="rounded border border-yellow-500/20 bg-yellow-500/5 p-3">
-                  <div className="flex items-center gap-1.5 text-sm text-yellow-500">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex items-center gap-1.5 text-sm text-amber-700">
                     <AlertCircle className="h-4 w-4" />
                     {result.status === 401 || result.status === 403 ? "TAI rejected credentials" : "Quote failed"}
                   </div>
@@ -189,13 +189,13 @@ export function RateQuotePanel({ onClose }: { onClose: () => void }) {
 function QuoteRow({ q, best }: { q: RateQuoteOption; best: boolean }) {
   return (
     <li
-      className={`rounded border p-3 ${best ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-background/40"}`}
+      className={`rounded-lg border p-3 ${best ? "border-emerald-300 bg-emerald-50" : "border-border bg-muted/50"}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
             {q.carrierName || q.carrierSCAC || "Carrier"}
-            {best && <span className="ml-2 text-[10px] uppercase tracking-wider text-emerald-400">Best</span>}
+            {best && <span className="ml-2 font-mono text-[10px] uppercase tracking-wider text-emerald-700">Best</span>}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {[q.serviceLevel, q.transitTime ? `${q.transitTime} day transit` : null].filter(Boolean).join(" · ") ||
@@ -204,7 +204,7 @@ function QuoteRow({ q, best }: { q: RateQuoteOption; best: boolean }) {
           </p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-lg font-bold tabular-nums text-emerald-300">{money(q.priceTotal)}</p>
+          <p className="font-mono text-lg font-bold tabular-nums text-emerald-700">{money(q.priceTotal)}</p>
           {(q.priceFuelSurcharge ?? 0) > 0 && (
             <p className="text-[10px] text-muted-foreground">incl. {money(q.priceFuelSurcharge)} fuel</p>
           )}
@@ -217,13 +217,13 @@ function QuoteRow({ q, best }: { q: RateQuoteOption; best: boolean }) {
 function Num({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
       <input
         type="number"
         min={0}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm text-foreground outline-none focus:border-sky-500"
+        className="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm text-foreground outline-none focus:border-primary"
       />
     </label>
   )
@@ -242,11 +242,11 @@ function Select({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-sky-500"
+        className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
       >
         {options.map((o) => (
           <option key={o} value={o}>
