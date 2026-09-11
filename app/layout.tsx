@@ -9,8 +9,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Mythos Freight Ops',
-  description: 'Unified Logistics Platform - Real-time freight operations management',
+  title: 'Freight Ops — TAI Live Feed',
+  description: 'Live freight shipments and status, streamed from TAI into a real-time operations dashboard',
   generator: 'v0.app',
   icons: {
     icon: [
