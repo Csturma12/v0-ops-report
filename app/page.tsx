@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import useSWR from "swr"
-import { RefreshCw, CheckCircle2, AlertCircle, Truck, TrendingUp, PackageCheck, AlertTriangle } from "lucide-react"
+import { RefreshCw, CheckCircle2, AlertCircle, Truck, TrendingUp, PackageCheck, AlertTriangle, Calculator } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { StatusTiles } from "@/components/shipments/status-tiles"
 import { ShipmentsBoard } from "@/components/shipments/shipments-board"
 import { ShipmentDetail } from "@/components/shipments/shipment-detail"
+import { RateQuotePanel } from "@/components/tai/rate-quote-panel"
 import type { ShipmentsResponse, StatusBucket } from "@/lib/types/shipment"
 
 const fetcher = async (url: string): Promise<ShipmentsResponse> => {
@@ -38,6 +39,7 @@ export default function ShipmentsDashboard() {
   const [dateTime, setDateTime] = useState({ date: "", time: "" })
   const [filter, setFilter] = useState<StatusBucket | "all">("all")
   const [openId, setOpenId] = useState<string | null>(null)
+  const [quoteOpen, setQuoteOpen] = useState(false)
 
   const { data, error, isLoading, isValidating, mutate } = useSWR<ShipmentsResponse>(
     "/api/shipments",
@@ -98,6 +100,15 @@ export default function ShipmentsDashboard() {
               </div>
               <p className="mt-0.5 text-[10px] text-muted-foreground/70">{lastReceived}</p>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setQuoteOpen(true)}
+            >
+              <Calculator className="h-3.5 w-3.5 text-sky-400" />
+              <span className="hidden sm:inline">Rate Quote</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -180,6 +191,7 @@ export default function ShipmentsDashboard() {
       </main>
 
       {openId && <ShipmentDetail shipmentId={openId} onClose={() => setOpenId(null)} />}
+      {quoteOpen && <RateQuotePanel onClose={() => setQuoteOpen(false)} />}
     </div>
   )
 }

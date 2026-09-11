@@ -1,7 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
-import { X, MapPin, Truck, Package, DollarSign, Clock } from "lucide-react"
+import { X, MapPin, Truck, Package, DollarSign, Clock, Satellite, Loader2, AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import type { Shipment, ShipmentEvent } from "@/lib/types/shipment"
 import { StatusBadge } from "@/components/shipments/status-badge"
 
@@ -149,10 +151,104 @@ export function ShipmentDetail({ shipmentId, onClose }: { shipmentId: string; on
                   </ol>
                 )}
               </div>
+
+              <LiveTaiSection shipmentId={shipment.shipment_id || shipmentId} />
             </div>
           )}
         </div>
       </aside>
+    </div>
+  )
+}
+
+type LiveState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "error"; status: number; message: string }
+  | { phase: "ok"; detail: unknown; tracking: unknown }
+
+function LiveTaiSection({ shipmentId }: { shipmentId: string }) {
+  const [state, setState] = useState<LiveState>({ phase: "idle" })
+
+  async function pull() {
+    setState({ phase: "loading" })
+    try {
+      const [d, t] = await Promise.all([
+        fetch(`/api/tai/shipment/${encodeURIComponent(shipmentId)}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/tai/tracking/${encodeURIComponent(shipmentId)}`, { cache: "no-store" }).then((r) => r.json()),
+      ])
+      if (!d.ok && !t.ok) {
+        setState({
+          phase: "error",
+          status: d.status ?? 0,
+          message: d.hint || d.error || "TAI request failed.",
+        })
+        return
+      }
+      setState({ phase: "ok", detail: d.ok ? d.shipment : null, tracking: t.ok ? t.tracking : null })
+    } catch {
+      setState({ phase: "error", status: 0, message: "Could not reach the TAI proxy." })
+    }
+  }
+
+  return (
+    <div className="rounded border border-sky-500/20 bg-sky-500/5 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-300">
+          <Satellite className="h-3 w-3" />
+          Live from TAI
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={pull}
+          disabled={state.phase === "loading"}
+        >
+          {state.phase === "loading" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Satellite className="h-3 w-3" />}
+          {state.phase === "loading" ? "Polling…" : "Poll TAI now"}
+        </Button>
+      </div>
+
+      {state.phase === "idle" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Fetch the latest detail and tracking directly from TAI for this shipment.
+        </p>
+      )}
+
+      {state.phase === "error" && (
+        <div className="mt-2 flex items-start gap-1.5 text-xs text-yellow-500">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>
+            {state.status === 401 || state.status === 403 ? "TAI rejected credentials — " : ""}
+            {state.message}
+          </span>
+        </div>
+      )}
+
+      {state.phase === "ok" && (
+        <div className="mt-2 space-y-2">
+          {state.detail !== null && (
+            <details className="text-xs" open>
+              <summary className="cursor-pointer text-muted-foreground">Shipment detail (raw)</summary>
+              <pre className="mt-1 max-h-48 overflow-auto rounded bg-background/60 p-2 font-mono text-[10px] text-foreground">
+                {JSON.stringify(state.detail, null, 2)}
+              </pre>
+            </details>
+          )}
+          {state.tracking !== null && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Tracking / location history (raw)</summary>
+              <pre className="mt-1 max-h-48 overflow-auto rounded bg-background/60 p-2 font-mono text-[10px] text-foreground">
+                {JSON.stringify(state.tracking, null, 2)}
+              </pre>
+            </details>
+          )}
+          {state.detail === null && state.tracking === null && (
+            <p className="text-xs text-muted-foreground">TAI returned no data for this shipment.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
