@@ -35,7 +35,77 @@ function money(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
 }
 
-export default function ShipmentsDashboard() {
+export default function Page() {
+  const [tab, setTab] = useState<"dispatch" | "leads">("dispatch")
+  const [leadsMounted, setLeadsMounted] = useState(false)
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <nav
+        className="flex flex-none items-center gap-2 border-b border-border bg-card px-4 py-2 lg:px-8"
+        aria-label="Primary views"
+      >
+        <div className="mr-1 flex h-6 w-6 items-center justify-center rounded bg-primary">
+          <BarChart3 className="h-3.5 w-3.5 text-primary-foreground" />
+        </div>
+        <TabButton active={tab === "dispatch"} onClick={() => setTab("dispatch")}>
+          Dispatch
+        </TabButton>
+        <TabButton
+          active={tab === "leads"}
+          onClick={() => {
+            setLeadsMounted(true)
+            setTab("leads")
+          }}
+        >
+          Houston Lead Board
+        </TabButton>
+      </nav>
+
+      <div className="relative min-h-0 flex-1">
+        <div className={`absolute inset-0 overflow-y-auto ${tab === "dispatch" ? "" : "hidden"}`}>
+          <DispatchView />
+        </div>
+        {leadsMounted && (
+          <div className={`absolute inset-0 ${tab === "leads" ? "" : "hidden"}`}>
+            <iframe
+              src="/lead-board/index.html"
+              title="Houston Lead Board"
+              className="h-full w-full border-0"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-md px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function DispatchView() {
   const [dateTime, setDateTime] = useState({ date: "", time: "" })
   const [filter, setFilter] = useState<StatusBucket | "all">("all")
   const [openId, setOpenId] = useState<string | null>(null)
@@ -69,7 +139,7 @@ export default function ShipmentsDashboard() {
     : "Awaiting TAI data"
 
   return (
-    <div className="flex min-h-screen flex-col bg-background fn-grid">
+    <div className="flex min-h-full flex-col bg-background fn-grid">
       {/* Identity bar */}
       <div className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8">
