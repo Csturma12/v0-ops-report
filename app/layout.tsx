@@ -1,16 +1,22 @@
 import type { Metadata } from 'next'
-import { JetBrains_Mono } from 'next/font/google'
+import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const jetbrainsMono = JetBrains_Mono({ 
-  subsets: ["latin"],
-  variable: '--font-mono'
-});
+const geistSans = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+})
 
 export const metadata: Metadata = {
-  title: 'Mythos Freight Ops',
-  description: 'Unified Logistics Platform - Real-time freight operations management',
+  title: 'Five Nines Logistics — Control Tower',
+  description:
+    'Live freight control tower for Five Nines Logistics — an agent of Primary Freight LLC. Real-time shipment status and dispatch, Houston, TX.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -37,8 +43,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`${jetbrainsMono.variable} font-mono antialiased`}>
+    <html lang="en" className="bg-background">
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
