@@ -6,7 +6,6 @@ import { SidebarNav } from "@/components/freight/sidebar-nav"
 import { OpsStats } from "@/components/freight/ops-stats"
 import { AIBrief } from "@/components/freight/ai-brief"
 import { ManualEntryForm } from "@/components/freight/manual-entry-form"
-import { PasteReportDialog } from "@/components/freight/paste-report-dialog"
 import {
   DetailDrawer,
   type SectionKey,
@@ -150,8 +149,6 @@ export default function OpsOverview() {
                   OPS OVERVIEW
                 </h1>
                 <p className="text-xs text-muted-foreground mt-2 flex flex-wrap items-center gap-1">
-                  <span className="text-blue-400">Mythos</span>
-                  <span className="text-muted-foreground/50">·</span>
                   <span className="text-yellow-500">
                     {dateTime.date || "Loading..."}
                   </span>
@@ -176,11 +173,6 @@ export default function OpsOverview() {
                     {lastSyncedText}
                   </p>
                 </div>
-                <PasteReportDialog
-                  onIngested={async () => {
-                    await Promise.all([mutate(), mutateHistory()])
-                  }}
-                />
                 <ManualEntryForm
                   currentMetrics={metrics}
                   onSave={handleManualSave}
@@ -214,12 +206,9 @@ export default function OpsOverview() {
                       No data yet
                     </p>
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      When your hourly Claude report hits Slack, copy the full
-                      message and click{" "}
-                      <span className="text-foreground font-medium">
-                        Paste Claude Report
-                      </span>{" "}
-                      above. Or load sample data to preview the dashboard.
+                      Your hourly Claude report will populate this dashboard
+                      automatically once it syncs. Or load sample data to preview
+                      the dashboard.
                     </p>
                   </div>
                   <Button
