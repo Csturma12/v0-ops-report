@@ -1,20 +1,11 @@
-// Cron endpoint to sync all integrations — runs hourly via vercel.json.
+// Cron endpoint that pulls the latest Primary Freight data from Supabase and
+// writes a snapshot the dashboard reads. Runs hourly via vercel.json.
 import { NextResponse } from "next/server"
-import type {
-  OpsMetrics,
-  OpsDetails,
-  SyncResult,
-  AlertItem,
-  LoadItem,
-  QuoteItem,
-} from "@/lib/types/ops"
-import { syncTAI, isConfigured as taiConfigured } from "@/lib/integrations/tai"
-import { syncGmail, isConfigured as gmailConfigured } from "@/lib/integrations/gmail"
+import type { OpsMetrics, OpsDetails, SyncResult } from "@/lib/types/ops"
 import {
-  syncTruckstop,
-  isConfigured as truckstopConfigured,
-} from "@/lib/integrations/truckstop"
-import { syncSlack, isConfigured as slackConfigured } from "@/lib/integrations/slack"
+  syncPrimaryFreight,
+  isConfigured as primaryFreightConfigured,
+} from "@/lib/integrations/primary-freight"
 import { writeSnapshot } from "@/lib/store/ops-store"
 
 export const dynamic = "force-dynamic"
@@ -32,87 +23,47 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const now = new Date().toISOString()
   const errors: string[] = []
-  const allAlerts: AlertItem[] = []
-  const allLoads: LoadItem[] = []
-  const allQuotes: QuoteItem[] = []
 
-  let taiResult = null
-  if (taiConfigured()) {
-    try {
-      taiResult = await syncTAI()
-      allAlerts.push(...taiResult.alerts)
-      allLoads.push(...taiResult.loads)
-    } catch (error) {
-      errors.push(`TAI: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
+  const emptyDetails: OpsDetails = {
+    criticalItems: [],
+    urgentItems: [],
+    uncoveredLoads: [],
+    newLoadItems: [],
+    quoteRequests: [],
+    cancelledShipments: [],
+    trackingUpdates: [],
+    billingGapItems: [],
   }
 
-  let slackResult = null
-  if (slackConfigured()) {
-    try {
-      slackResult = await syncSlack()
-      allAlerts.push(...slackResult.alerts)
-      allQuotes.push(...slackResult.quoteDiscussions)
-    } catch (error) {
-      errors.push(`Slack: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
-  }
+  let details = emptyDetails
+  let rowCounts = { loads: 0, shipments: 0, events: 0 }
 
-  let gmailResult = null
-  if (gmailConfigured()) {
+  if (primaryFreightConfigured()) {
     try {
-      gmailResult = await syncGmail()
-      allQuotes.push(...gmailResult.quoteRequests)
-    } catch (error) {
-      errors.push(`Gmail: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
-  }
-
-  let truckstopResult = null
-  if (truckstopConfigured()) {
-    try {
-      truckstopResult = await syncTruckstop()
-      allLoads.push(...truckstopResult.postedLoads)
+      const result = await syncPrimaryFreight()
+      details = result.details
+      rowCounts = result.rowCounts
     } catch (error) {
       errors.push(
-        `Truckstop: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Primary Freight: ${error instanceof Error ? error.message : "Unknown error"}`,
       )
     }
+  } else {
+    errors.push("Primary Freight: Supabase not configured")
   }
-
-  const criticalAlerts = allAlerts.filter((a) => a.priority === "critical")
-  const urgentAlerts = allAlerts.filter(
-    (a) => a.priority === "high" && a.type === "urgent",
-  )
-  const uncoveredLoads = allLoads.filter((l) => l.status === "uncovered")
-  const newLoads = allLoads.filter((l) => l.status === "new")
-  const cancelledLoads = allLoads.filter((l) => l.status === "cancelled")
-  const inTransitLoads = allLoads.filter((l) => l.status === "in_transit")
-
-  const now = new Date().toISOString()
 
   const metrics: OpsMetrics = {
-    critical: criticalAlerts.length,
-    urgent: urgentAlerts.length,
-    uncovered: uncoveredLoads.length,
-    newLoads: newLoads.length,
-    quotes: allQuotes.filter((q) => q.status === "open").length,
-    cancels: cancelledLoads.length,
-    tracking: inTransitLoads.length,
-    billingGaps: taiResult?.billingGaps.length || 0,
+    critical: details.criticalItems.length,
+    urgent: details.urgentItems.length,
+    uncovered: details.uncoveredLoads.length,
+    newLoads: details.newLoadItems.length,
+    quotes: details.quoteRequests.length,
+    cancels: details.cancelledShipments.length,
+    tracking: details.trackingUpdates.length,
+    billingGaps: details.billingGapItems.length,
     lastSynced: now,
-  }
-
-  const details: OpsDetails = {
-    criticalItems: criticalAlerts,
-    urgentItems: urgentAlerts,
-    uncoveredLoads,
-    newLoadItems: newLoads,
-    quoteRequests: allQuotes.filter((q) => q.status === "open"),
-    cancelledShipments: cancelledLoads,
-    trackingUpdates: taiResult?.tracking || [],
-    billingGapItems: taiResult?.billingGaps || [],
   }
 
   const result: SyncResult = {
@@ -123,13 +74,13 @@ export async function GET(request: Request) {
     errors: errors.length > 0 ? errors : undefined,
   }
 
-  // Persist to Redis so the dashboard sees the new data.
-  await writeSnapshot({
-    metrics,
-    details,
-    source: "sync",
-    updatedAt: now,
-  })
+  console.log("[v0] /api/sync pulled Primary Freight data — rows:", rowCounts, "metrics:", metrics)
+
+  // Only persist when the pull succeeded, so a transient read error doesn't
+  // wipe the dashboard back to zeros.
+  if (errors.length === 0) {
+    await writeSnapshot({ metrics, details, source: "sync", updatedAt: now })
+  }
 
   return NextResponse.json(result)
 }

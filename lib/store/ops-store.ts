@@ -1,5 +1,5 @@
 // Supabase-backed store for the latest ops snapshot and 24-hour history.
-// The hourly Claude report (or manual entry) writes here; the dashboard reads from here.
+// The hourly Primary Freight sync (or manual entry) writes here; the dashboard reads from here.
 //
 // Uses the Supabase REST API (PostgREST) directly via fetch with the
 // service-role key, so no extra client dependency is required. This code is
@@ -12,7 +12,7 @@ const HISTORY_LIMIT = 24
 export interface OpsSnapshot {
   metrics: OpsMetrics
   details?: OpsDetails
-  source: "claude" | "manual" | "sync"
+  source: "manual" | "sync"
   updatedAt: string
 }
 

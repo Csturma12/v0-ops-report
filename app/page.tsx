@@ -113,6 +113,9 @@ export default function OpsOverview() {
   const connectedCount = data?.integrationStatus
     ? Object.values(data.integrationStatus).filter((s) => s.connected).length
     : 0
+  const totalIntegrations = data?.integrationStatus
+    ? Object.keys(data.integrationStatus).length
+    : 0
 
   const activeCount =
     activeSection && metrics
@@ -167,7 +170,9 @@ export default function OpsOverview() {
                     ) : (
                       <AlertCircle className="h-3 w-3 text-yellow-500" />
                     )}
-                    <span>{connectedCount}/4 integrations</span>
+                    <span>
+                      {connectedCount}/{totalIntegrations || 3} streams
+                    </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                     {lastSyncedText}
@@ -206,9 +211,9 @@ export default function OpsOverview() {
                       No data yet
                     </p>
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      Your hourly Claude report will populate this dashboard
-                      automatically once it syncs. Or load sample data to preview
-                      the dashboard.
+                      The hourly Primary Freight sync will populate this dashboard
+                      automatically once loads and shipments land in Supabase. Or
+                      load sample data to preview the dashboard.
                     </p>
                   </div>
                   <Button

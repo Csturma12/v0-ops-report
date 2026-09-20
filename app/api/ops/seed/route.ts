@@ -1,5 +1,5 @@
 // Seed the store with realistic sample data so users can preview the dashboard
-// (including drawer item lists) before the Claude job starts sending real data.
+// (including drawer item lists) before the Primary Freight sync sends real data.
 // Refuses to overwrite existing data unless ?force=1 is passed.
 import { NextRequest, NextResponse } from "next/server"
 import { readSnapshot, writeSnapshot } from "@/lib/store/ops-store"
@@ -220,6 +220,6 @@ export async function POST(request: NextRequest) {
     success: ok,
     message: ok
       ? "Sample data loaded. Refresh the dashboard or click any card to explore."
-      : "Redis not configured - could not persist sample data.",
+      : "Supabase not configured - could not persist sample data.",
   })
 }
