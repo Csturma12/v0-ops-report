@@ -10,7 +10,7 @@
 //   POST text/plain with the raw report as the body
 import { NextResponse } from "next/server"
 import { parseFreightReport } from "@/lib/parsers/freight-report"
-import { writeSnapshot, isRedisConfigured } from "@/lib/store/ops-store"
+import { writeSnapshot, isStoreConfigured } from "@/lib/store/ops-store"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -39,7 +39,7 @@ export async function GET() {
         'POST application/json {"report": "<full report>"}',
         "POST text/plain with the raw report as the body",
       ],
-      redisConfigured: isRedisConfigured(),
+      storeConfigured: isStoreConfigured(),
     },
     { headers: corsHeaders() },
   )
@@ -85,9 +85,9 @@ export async function POST(req: Request) {
     )
   }
 
-  if (!isRedisConfigured()) {
+  if (!isStoreConfigured()) {
     return NextResponse.json(
-      { error: "redis_not_configured" },
+      { error: "store_not_configured" },
       { status: 500, headers: corsHeaders() },
     )
   }
