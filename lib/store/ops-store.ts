@@ -1,10 +1,11 @@
-// Redis-backed store for the latest ops snapshot and 24-hour history.
-// The hourly Claude report (or manual entry) writes here; the dashboard reads from here.
-import { Redis } from "@upstash/redis"
+// Supabase-backed store for the latest ops snapshot and 24-hour history.
+// Rows live in ops_report.snapshots (project nonqwidfqrklksjluloz), which is
+// append-only: every write is a new row, the latest row is the snapshot, and the
+// last 24 rows are the trend history. Replaces the former Upstash KV store.
+// Access is through two service-role RPCs; the schema is not exposed directly.
+import { getSupabaseAdmin } from "@/lib/supabase/server"
 import type { OpsDetails, OpsMetrics } from "@/lib/types/ops"
 
-const OPS_SNAPSHOT_KEY = "ops:snapshot:latest"
-const OPS_HISTORY_KEY = "ops:history"
 const HISTORY_LIMIT = 24
 
 export interface OpsSnapshot {
@@ -27,80 +28,85 @@ export interface OpsHistoryPoint {
   billingGaps: number
 }
 
-// Lazily construct the client so builds don't crash if env vars are missing.
-function getRedis(): Redis | null {
-  const url = process.env.KV_REST_API_URL
-  const token = process.env.KV_REST_API_TOKEN
-  if (!url || !token) return null
-  return new Redis({ url, token })
+interface SnapshotRow {
+  metrics: OpsMetrics
+  details: OpsDetails | null
+  source: OpsSnapshot["source"]
+  updated_at: string
+}
+
+export function isStoreConfigured(): boolean {
+  return Boolean(
+    (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+      (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY),
+  )
+}
+
+// Kept for existing callers; the store is Supabase now, not Redis.
+export const isRedisConfigured = isStoreConfigured
+
+async function recent(limit: number): Promise<SnapshotRow[]> {
+  if (!isStoreConfigured()) return []
+  const { data, error } = await getSupabaseAdmin().rpc("ops_report_recent", { p_limit: limit })
+  if (error) throw error
+  return (data ?? []) as SnapshotRow[]
 }
 
 export async function readSnapshot(): Promise<OpsSnapshot | null> {
-  const redis = getRedis()
-  if (!redis) return null
   try {
-    const snapshot = await redis.get<OpsSnapshot>(OPS_SNAPSHOT_KEY)
-    return snapshot ?? null
+    const [row] = await recent(1)
+    if (!row) return null
+    return {
+      metrics: row.metrics,
+      details: row.details ?? undefined,
+      source: row.source,
+      updatedAt: row.updated_at,
+    }
   } catch (err) {
-    console.error("[v0] readSnapshot failed:", err)
+    console.error("[ops-store] readSnapshot failed:", err)
     return null
   }
 }
 
 export async function writeSnapshot(snapshot: OpsSnapshot): Promise<boolean> {
-  const redis = getRedis()
-  if (!redis) {
-    console.warn("[v0] writeSnapshot: Redis not configured, snapshot not persisted")
+  if (!isStoreConfigured()) {
+    console.warn("[ops-store] writeSnapshot: Supabase not configured, snapshot not persisted")
     return false
   }
   try {
-    await redis.set(OPS_SNAPSHOT_KEY, snapshot)
-    // Also append a compact point to the history list (cap at HISTORY_LIMIT).
-    const point: OpsHistoryPoint = {
-      timestamp: snapshot.updatedAt,
-      critical: snapshot.metrics.critical,
-      urgent: snapshot.metrics.urgent,
-      uncovered: snapshot.metrics.uncovered,
-      newLoads: snapshot.metrics.newLoads,
-      quotes: snapshot.metrics.quotes,
-      cancels: snapshot.metrics.cancels,
-      tracking: snapshot.metrics.tracking,
-      billingGaps: snapshot.metrics.billingGaps,
-    }
-    await redis.lpush(OPS_HISTORY_KEY, JSON.stringify(point))
-    await redis.ltrim(OPS_HISTORY_KEY, 0, HISTORY_LIMIT - 1)
+    const { error } = await getSupabaseAdmin().rpc("ops_report_write_snapshot", {
+      p_metrics: snapshot.metrics,
+      p_details: snapshot.details ?? null,
+      p_source: snapshot.source,
+      p_updated_at: snapshot.updatedAt,
+    })
+    if (error) throw error
     return true
   } catch (err) {
-    console.error("[v0] writeSnapshot failed:", err)
+    console.error("[ops-store] writeSnapshot failed:", err)
     return false
   }
 }
 
 export async function readHistory(): Promise<OpsHistoryPoint[]> {
-  const redis = getRedis()
-  if (!redis) return []
   try {
-    const raw = await redis.lrange(OPS_HISTORY_KEY, 0, HISTORY_LIMIT - 1)
-    // LPUSH stores newest-first; reverse so the array is oldest→newest for charts.
-    return raw
-      .map((entry) => {
-        if (typeof entry === "string") {
-          try {
-            return JSON.parse(entry) as OpsHistoryPoint
-          } catch {
-            return null
-          }
-        }
-        return entry as unknown as OpsHistoryPoint
-      })
-      .filter((p): p is OpsHistoryPoint => Boolean(p))
+    const rows = await recent(HISTORY_LIMIT)
+    // Newest-first from the RPC; reverse so charts read oldest to newest.
+    return rows
+      .map((row) => ({
+        timestamp: row.updated_at,
+        critical: row.metrics.critical,
+        urgent: row.metrics.urgent,
+        uncovered: row.metrics.uncovered,
+        newLoads: row.metrics.newLoads,
+        quotes: row.metrics.quotes,
+        cancels: row.metrics.cancels,
+        tracking: row.metrics.tracking,
+        billingGaps: row.metrics.billingGaps,
+      }))
       .reverse()
   } catch (err) {
-    console.error("[v0] readHistory failed:", err)
+    console.error("[ops-store] readHistory failed:", err)
     return []
   }
-}
-
-export function isRedisConfigured(): boolean {
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
 }

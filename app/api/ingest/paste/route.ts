@@ -1,6 +1,6 @@
 // Accepts raw text of a Claude freight-ops report (pasted from Slack or
 // POSTed directly by a Claude scheduled task), parses it, and writes the
-// snapshot + history point into Redis.
+// snapshot + history point into Supabase (ops_report.snapshots).
 //
 // Accepted request shapes (all work):
 //   POST JSON { "text": "..." }

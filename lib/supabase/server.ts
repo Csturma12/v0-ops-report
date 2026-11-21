@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 // Read-only server client. RLS is enabled on the shipment tables with no anon
 // policies, so all reads go through the service-role key on the server only.
-// This app NEVER writes to Supabase — the TAI relay (hosted on Fly) owns writes.
+// The only writes are append-only ops snapshots via RPC (lib/store/ops-store.ts);
+// shipment writes stay with the TAI relay on Fly.
 let cached: SupabaseClient | null = null
 
 export function getSupabaseAdmin(): SupabaseClient {

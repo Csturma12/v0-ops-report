@@ -1,4 +1,4 @@
-// Dashboard read endpoint — returns the latest Redis-backed snapshot.
+// Dashboard read endpoint — returns the latest Supabase-backed snapshot.
 import { NextResponse } from "next/server"
 import type { OpsDataResponse, OpsMetrics, IntegrationStatus } from "@/lib/types/ops"
 import { isConfigured as taiConfigured } from "@/lib/integrations/tai"

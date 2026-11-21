@@ -34,6 +34,6 @@ export async function POST(request: NextRequest) {
     success: ok,
     message: ok
       ? "Live ops data loaded (Thu Apr 23). Refresh the dashboard to see current action items."
-      : "Redis not configured - could not persist data.",
+      : "Supabase not configured - could not persist data.",
   })
 }

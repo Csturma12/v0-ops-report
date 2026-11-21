@@ -1,5 +1,5 @@
 // Write endpoint for the hourly Claude report and manual entry form.
-// POSTs here persist a snapshot in Redis so the dashboard can render it.
+// POSTs here persist a snapshot in Supabase (ops_report.snapshots) so the dashboard can render it.
 import { NextRequest, NextResponse } from "next/server"
 import type { OpsDetails, OpsMetrics } from "@/lib/types/ops"
 import { readSnapshot, writeSnapshot } from "@/lib/store/ops-store"
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       metrics,
       message: ok
         ? "Snapshot saved"
-        : "Snapshot accepted but not persisted (Redis unavailable)",
+        : "Snapshot accepted but not persisted (Supabase unavailable)",
     })
   } catch (error) {
     console.error("[v0] manual POST error:", error)

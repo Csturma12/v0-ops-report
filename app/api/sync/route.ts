@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     errors: errors.length > 0 ? errors : undefined,
   }
 
-  // Persist to Redis so the dashboard sees the new data.
+  // Persist to Supabase so the dashboard sees the new data.
   await writeSnapshot({
     metrics,
     details,
