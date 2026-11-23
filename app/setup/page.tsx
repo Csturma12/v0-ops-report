@@ -182,15 +182,15 @@ export default function SetupPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Claude Summary Integration</CardTitle>
+            <CardTitle>Back to the Dashboard</CardTitle>
             <CardDescription>
-              Since Claude generates summaries for you, here&apos;s how to connect that
+              Live loads, shipments, and tracking sync automatically from Primary Freight
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Copy your Claude-generated summary and paste it into the AI Brief section on the dashboard. 
-              The &quot;Run AI Brief&quot; button can also generate insights from your synced metrics.
+              The bookmarklet above is an optional manual fallback. Your dashboard
+              refreshes on its own as new data lands in Supabase.
             </p>
             <div className="flex gap-2">
               <Link href="/">

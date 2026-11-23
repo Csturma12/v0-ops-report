@@ -1,4 +1,4 @@
-// Ops data types for Mythos Freight Ops
+// Ops data types for Primary Freight Ops
 
 export interface OpsMetrics {
   critical: number
@@ -118,12 +118,7 @@ export interface OpsDataResponse {
   integrationStatus: IntegrationStatus
 }
 
-export interface IntegrationStatus {
-  slack: ConnectionStatus
-  gmail: ConnectionStatus
-  tai: ConnectionStatus
-  truckstop: ConnectionStatus
-}
+export type IntegrationStatus = Record<string, ConnectionStatus>
 
 export interface ConnectionStatus {
   connected: boolean

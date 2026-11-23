@@ -166,7 +166,7 @@ function DetailBody({
     return (
       <EmptyState
         message="No itemized data yet"
-        hint="The hourly Claude report can include a details payload. Once it runs, you'll see individual items here."
+        hint="The hourly Primary Freight sync includes a details payload. Once it runs, you'll see individual items here."
       />
     )
   }

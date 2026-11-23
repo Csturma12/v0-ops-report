@@ -1,10 +1,7 @@
-// Dashboard read endpoint — returns the latest Redis-backed snapshot.
+// Dashboard read endpoint — returns the latest Supabase-backed snapshot.
 import { NextResponse } from "next/server"
 import type { OpsDataResponse, OpsMetrics, IntegrationStatus } from "@/lib/types/ops"
-import { isConfigured as taiConfigured } from "@/lib/integrations/tai"
-import { isConfigured as gmailConfigured } from "@/lib/integrations/gmail"
-import { isConfigured as truckstopConfigured } from "@/lib/integrations/truckstop"
-import { isConfigured as slackConfigured } from "@/lib/integrations/slack"
+import { isConfigured as primaryFreightConfigured } from "@/lib/integrations/primary-freight"
 import { readSnapshot } from "@/lib/store/ops-store"
 
 export const dynamic = "force-dynamic"
@@ -26,12 +23,14 @@ export async function GET() {
   const snapshot = await readSnapshot()
 
   const lastSync = snapshot?.metrics.lastSynced ?? snapshot?.updatedAt ?? null
+  const connected = primaryFreightConfigured()
 
+  // All three streams come from the same Primary Freight Supabase source, so
+  // they share the same connection + last-sync state.
   const integrationStatus: IntegrationStatus = {
-    slack: { connected: slackConfigured(), lastSync },
-    gmail: { connected: gmailConfigured(), lastSync },
-    tai: { connected: taiConfigured(), lastSync },
-    truckstop: { connected: truckstopConfigured(), lastSync },
+    Loads: { connected, lastSync },
+    Shipments: { connected, lastSync },
+    Tracking: { connected, lastSync },
   }
 
   const response: OpsDataResponse = {

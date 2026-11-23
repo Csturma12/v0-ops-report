@@ -1,5 +1,5 @@
-// Write endpoint for the hourly Claude report and manual entry form.
-// POSTs here persist a snapshot in Redis so the dashboard can render it.
+// Write endpoint for the manual entry form and the setup bookmarklet.
+// POSTs here persist a snapshot in Supabase so the dashboard can render it.
 import { NextRequest, NextResponse } from "next/server"
 import type { OpsDetails, OpsMetrics } from "@/lib/types/ops"
 import { readSnapshot, writeSnapshot } from "@/lib/store/ops-store"
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    // Optional shared-secret auth for automated writers (Claude job).
+    // Optional shared-secret auth for automated writers.
     // If OPS_WRITE_SECRET is set, require a matching Bearer token.
     const writeSecret = process.env.OPS_WRITE_SECRET
     if (writeSecret) {
@@ -57,8 +57,7 @@ export async function POST(request: NextRequest) {
         }
       : undefined
 
-    const source =
-      body.source === "claude" || body.source === "sync" ? body.source : "manual"
+    const source = body.source === "sync" ? "sync" : "manual"
 
     const ok = await writeSnapshot({
       metrics,
@@ -73,7 +72,7 @@ export async function POST(request: NextRequest) {
       metrics,
       message: ok
         ? "Snapshot saved"
-        : "Snapshot accepted but not persisted (Redis unavailable)",
+        : "Snapshot accepted but not persisted (Supabase unavailable)",
     })
   } catch (error) {
     console.error("[v0] manual POST error:", error)
@@ -90,7 +89,7 @@ export async function GET() {
     return NextResponse.json({
       success: false,
       metrics: null,
-      message: "No data yet - waiting for the next hourly report.",
+      message: "No data yet - waiting for the next hourly sync.",
     })
   }
 
